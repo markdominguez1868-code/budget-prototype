@@ -1,0 +1,1028 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Prototype: Income vs Expense + Credit Card Snowball</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root{
+      --bg:#0b1220; --card:#111a2e; --text:#e6eefc; --muted:#9bb0d1;
+      --ok:#5cffb3; --danger:#ff6a7a; --warning:#ffd36a;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      background:radial-gradient(1200px 800px at 20% 0%, #162447 0%, var(--bg) 55%);
+      color:var(--text); padding:20px;
+    }
+    .wrap{max-width:1180px;margin:0 auto}
+    header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px}
+    h1{font-size:18px;margin:0;letter-spacing:.3px}
+    .sub{color:var(--muted);font-size:13px;margin-top:4px;line-height:1.4}
+    .grid{display:grid;grid-template-columns:420px 1fr;gap:14px}
+    .card{
+      background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.02));
+      border:1px solid rgba(255,255,255,.07);
+      border-radius:14px;padding:14px;box-shadow:0 18px 45px rgba(0,0,0,.35);
+    }
+    .card h2{font-size:14px;margin:0 0 10px 0;color:#d8e6ff}
+    label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+    input,select,button{
+      width:100%; background:rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.10);
+      color:var(--text); border-radius:10px; padding:10px 10px; outline:none;
+    }
+    input[type="checkbox"]{width:auto;transform:translateY(1px)}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+    .mt8{margin-top:8px} .mt10{margin-top:10px} .mt12{margin-top:12px}
+    .btnrow{display:flex;gap:10px;margin-top:10px}
+    button{cursor:pointer;font-weight:600}
+    button.primary{background:rgba(106,168,255,.18);border-color:rgba(106,168,255,.35)}
+    button.danger{background:rgba(255,106,122,.14);border-color:rgba(255,106,122,.30)}
+    button.ghost{background:transparent}
+    .hint{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.35}
+    .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
+    .kpi{background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:10px}
+    .kpi .label{font-size:11px;color:var(--muted)}
+    .kpi .value{font-size:16px;margin-top:2px;font-weight:700}
+    .value.ok{color:var(--ok)} .value.bad{color:var(--danger)} .value.warn{color:var(--warning)}
+    table{width:100%;border-collapse:collapse;margin-top:10px}
+    th,td{font-size:12px;padding:9px 8px;border-bottom:1px solid rgba(255,255,255,.08)}
+    th{text-align:left;color:var(--muted);font-weight:600}
+    td.right{text-align:right}
+    .tag{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:999px;font-size:11px;
+      border:1px solid rgba(255,255,255,.10);color:var(--text);background:rgba(255,255,255,.04)}
+    .tag.income{border-color:rgba(92,255,179,.35);background:rgba(92,255,179,.12)}
+    .tag.expense{border-color:rgba(255,106,122,.35);background:rgba(255,106,122,.12)}
+    .tag.recurring{border-color:rgba(255,211,106,.35);background:rgba(255,211,106,.12);color:#fff3d1}
+    .tag.debt{border-color:rgba(255,211,106,.35);background:rgba(255,211,106,.12)}
+    .flex{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .small{font-size:12px;color:var(--muted)}
+    .chartWrap{height:320px}
+    .chartWrapSm{height:260px}
+    details{border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:10px;background:rgba(0,0,0,.16)}
+    details > summary{cursor:pointer;color:#d8e6ff;font-weight:700;font-size:13px}
+    @media (max-width: 1020px){
+      .grid{grid-template-columns:1fr}
+      .chartWrap{height:300px}
+      .chartWrapSm{height:240px}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Financial Prototype: Projections + Credit Card Snowball</h1>
+        <div class="sub">
+          Operating model includes: month-over-month projection, recurring “memory” items, and a smart credit card payoff plan using the Snowball method.
+        </div>
+      </div>
+      <div class="small" id="status"></div>
+    </header>
+
+    <div class="grid">
+      <!-- LEFT: Inputs -->
+      <section class="card">
+        <h2>Projection controls</h2>
+        <div class="row">
+          <div>
+            <label for="startMonth">Start month</label>
+            <input id="startMonth" type="month" />
+          </div>
+          <div>
+            <label for="monthsCount">Months to display</label>
+            <select id="monthsCount">
+              <option value="6">6</option>
+              <option value="12" selected>12</option>
+              <option value="18">18</option>
+              <option value="24">24</option>
+            </select>
+          </div>
+        </div>
+
+        <details class="mt12" open>
+          <summary>Income & expense items (with memory)</summary>
+
+          <div class="mt10 row">
+            <div>
+              <label for="type">Type</label>
+              <select id="type">
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+              </select>
+            </div>
+            <div>
+              <label for="name">Name</label>
+              <input id="name" placeholder="e.g., Paycheck, Rent, Utilities" />
+            </div>
+          </div>
+
+          <div class="row mt10">
+            <div>
+              <label for="amount">Amount (monthly)</label>
+              <input id="amount" type="number" step="0.01" placeholder="e.g., 3500" />
+            </div>
+            <div>
+              <label for="monthApplies">Month applies</label>
+              <input id="monthApplies" type="month" />
+            </div>
+          </div>
+
+          <div class="flex mt10">
+            <label class="flex" style="margin:0;">
+              <input id="recurring" type="checkbox" />
+              <span class="small">Recurring (persist and always factor in)</span>
+            </label>
+          </div>
+
+          <div class="btnrow">
+            <button class="primary" id="addBtn">Add item</button>
+            <button class="ghost" id="demoBtn">Load demo data</button>
+          </div>
+
+          <div class="hint">
+            Recurring items roll forward month-over-month from their start month. Non-recurring items apply only to the selected month.
+          </div>
+
+          <div style="max-height: 220px; overflow:auto; margin-top: 8px;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Type</th>
+                  <th class="right">Amount</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="itemsTbody"></tbody>
+            </table>
+          </div>
+        </details>
+
+        <details class="mt12" open>
+          <summary>Credit cards: Snowball payoff (smart debt approach)</summary>
+
+          <div class="hint mt8">
+            Snowball method: pay minimums on all cards, then direct all “extra” dollars to the smallest balance first. When a card is paid off, roll its payment into the next card (accelerating payoff velocity).
+          </div>
+
+          <div class="row mt10">
+            <div>
+              <label for="ccName">Card name</label>
+              <input id="ccName" placeholder="e.g., Visa, Discover" />
+            </div>
+            <div>
+              <label for="ccBalance">Current balance</label>
+              <input id="ccBalance" type="number" step="0.01" placeholder="e.g., 2400" />
+            </div>
+          </div>
+
+          <div class="row3 mt10">
+            <div>
+              <label for="ccMin">Minimum payment</label>
+              <input id="ccMin" type="number" step="0.01" placeholder="e.g., 65" />
+            </div>
+            <div>
+              <label for="ccApr">APR % (optional)</label>
+              <input id="ccApr" type="number" step="0.01" placeholder="e.g., 24.99" />
+            </div>
+            <div>
+              <label for="ccStart">Start month</label>
+              <input id="ccStart" type="month" />
+            </div>
+          </div>
+
+          <div class="flex mt10">
+            <label class="flex" style="margin:0;">
+              <input id="ccRecurring" type="checkbox" checked />
+              <span class="small">Persist card in memory</span>
+            </label>
+          </div>
+
+          <div class="btnrow">
+            <button class="primary" id="ccAddBtn">Add credit card</button>
+            <button class="ghost" id="ccDemoBtn">Load demo cards</button>
+          </div>
+
+          <div class="row mt10">
+            <div>
+              <label for="ccExtra">Extra payment budget (monthly)</label>
+              <input id="ccExtra" type="number" step="0.01" placeholder="e.g., 150" />
+            </div>
+            <div>
+              <label for="ccMaxMonths">Simulation months</label>
+              <select id="ccMaxMonths">
+                <option value="12">12</option>
+                <option value="24" selected>24</option>
+                <option value="36">36</option>
+                <option value="60">60</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="btnrow">
+            <button class="primary" id="ccRunBtn">Run Snowball Plan</button>
+          </div>
+
+          <div style="max-height: 220px; overflow:auto; margin-top: 8px;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Card</th>
+                  <th class="right">Balance</th>
+                  <th class="right">Min</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="ccTbody"></tbody>
+            </table>
+          </div>
+        </details>
+
+        <div class="btnrow mt12">
+          <button class="danger" id="clearBtn">Clear all saved data</button>
+        </div>
+      </section>
+
+      <!-- RIGHT: Outputs -->
+      <section class="card">
+        <h2>Month-over-month projection</h2>
+
+        <div class="kpis">
+          <div class="kpi">
+            <div class="label">Avg Monthly Income</div>
+            <div class="value" id="kpiIncome">$0</div>
+          </div>
+          <div class="kpi">
+            <div class="label">Avg Monthly Expense</div>
+            <div class="value" id="kpiExpense">$0</div>
+          </div>
+          <div class="kpi">
+            <div class="label">Avg Net (Income - Expense)</div>
+            <div class="value" id="kpiNet">$0</div>
+          </div>
+        </div>
+
+        <div class="chartWrap mt10">
+          <canvas id="lineChart"></canvas>
+        </div>
+
+        <div class="mt12">
+          <h2>History (month-by-month)</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th class="right">Projected Income</th>
+                <th class="right">Projected Expense</th>
+                <th class="right">Net</th>
+              </tr>
+            </thead>
+            <tbody id="momTbody"></tbody>
+          </table>
+        </div>
+
+        <div class="mt12">
+          <h2>Debt payoff: Snowball dashboard</h2>
+
+          <div class="kpis">
+            <div class="kpi">
+              <div class="label">Total Card Balance</div>
+              <div class="value" id="kpiDebt">$0</div>
+            </div>
+            <div class="kpi">
+              <div class="label">Estimated Payoff Timeline</div>
+              <div class="value" id="kpiPayoff">—</div>
+            </div>
+            <div class="kpi">
+              <div class="label">Monthly Payment Budget</div>
+              <div class="value" id="kpiPayBudget">$0</div>
+            </div>
+          </div>
+
+          <div class="chartWrapSm mt10">
+            <canvas id="debtChart"></canvas>
+          </div>
+
+          <div class="mt12">
+            <h2>Snowball plan (priority order)</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Priority</th>
+                  <th>Card</th>
+                  <th class="right">Starting Balance</th>
+                  <th class="right">Minimum</th>
+                  <th>Rationale</th>
+                </tr>
+              </thead>
+              <tbody id="snowballOrderTbody"></tbody>
+            </table>
+          </div>
+
+          <div class="mt12">
+            <h2>Payoff schedule (month-by-month)</h2>
+            <div class="small">Shows which card is targeted each month and the remaining total balance.</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th>Target Card</th>
+                  <th class="right">Total Payment</th>
+                  <th class="right">Remaining Total Balance</th>
+                </tr>
+              </thead>
+              <tbody id="snowballScheduleTbody"></tbody>
+            </table>
+          </div>
+
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    // -----------------------------
+    // Persistence (localStorage)
+    // -----------------------------
+    const STORAGE_KEY = "incomeExpenseDebtPrototype.v2";
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return { items: [], cards: [], startMonth: null, monthsCount: 12, ccExtra: 0, ccMaxMonths: 24 };
+        const p = JSON.parse(raw);
+        return {
+          items: Array.isArray(p.items) ? p.items : [],
+          cards: Array.isArray(p.cards) ? p.cards : [],
+          startMonth: p.startMonth || null,
+          monthsCount: Number(p.monthsCount || 12),
+          ccExtra: Number(p.ccExtra || 0),
+          ccMaxMonths: Number(p.ccMaxMonths || 24)
+        };
+      } catch {
+        return { items: [], cards: [], startMonth: null, monthsCount: 12, ccExtra: 0, ccMaxMonths: 24 };
+      }
+    }
+
+    function saveState(state) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      setStatus("Saved.");
+    }
+
+    function setStatus(msg) {
+      const el = document.getElementById("status");
+      el.textContent = msg;
+      clearTimeout(setStatus._t);
+      setStatus._t = setTimeout(() => el.textContent = "", 1200);
+    }
+
+    // -----------------------------
+    // Date helpers
+    // -----------------------------
+    function todayMonthValue() {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      return `${y}-${m}`;
+    }
+
+    function addMonths(ym, add) {
+      const [Y, M] = ym.split("-").map(Number);
+      const d = new Date(Y, M - 1, 1);
+      d.setMonth(d.getMonth() + add);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      return `${y}-${m}`;
+    }
+
+    function formatMonthLabel(ym) {
+      const [Y, M] = ym.split("-").map(Number);
+      const d = new Date(Y, M - 1, 1);
+      return d.toLocaleString(undefined, { month: "short", year: "numeric" });
+    }
+
+    function currency(n) {
+      return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(n);
+    }
+
+    // -----------------------------
+    // Projection logic (Income/Expense)
+    // Items:
+    // { id, type, name, amount, monthApplies, recurring }
+    // recurring applies to months >= monthApplies
+    // -----------------------------
+    function computeSeries(state, startMonth, monthsCount) {
+      const months = [];
+      for (let i = 0; i < monthsCount; i++) months.push(addMonths(startMonth, i));
+
+      const income = [];
+      const expense = [];
+      const net = [];
+
+      for (const ym of months) {
+        let inc = 0, exp = 0;
+        for (const it of state.items) {
+          if (!it || !it.type || !it.amount) continue;
+          const amount = Number(it.amount) || 0;
+          const appliesMonth = it.monthApplies;
+
+          const isApplicable = it.recurring
+            ? (appliesMonth && ym >= appliesMonth)
+            : (appliesMonth === ym);
+
+          if (!isApplicable) continue;
+          if (it.type === "income") inc += amount;
+          if (it.type === "expense") exp += amount;
+        }
+        income.push(inc);
+        expense.push(exp);
+        net.push(inc - exp);
+      }
+      return { months, income, expense, net };
+    }
+
+    // -----------------------------
+    // Debt Snowball logic (Credit Cards)
+    // Cards:
+    // { id, name, balance, min, apr, startMonth, persistent }
+    // Snowball order: smallest balance first (ties: smallest min, then name)
+    // Each month: pay minimum on all active cards, plus extra directed to the current smallest-balance card.
+    // Interest (optional): applied monthly using APR/12 (simple model).
+    // -----------------------------
+    function computeSnowballPlan(state, baseMonth) {
+      const maxMonths = Number(document.getElementById("ccMaxMonths").value || state.ccMaxMonths || 24);
+      const extra = Number(document.getElementById("ccExtra").value || state.ccExtra || 0);
+
+      // Filter cards that have started by baseMonth
+      const cards0 = (state.cards || [])
+        .filter(c => (c.startMonth ? c.startMonth <= baseMonth : true))
+        .map(c => ({
+          id: c.id,
+          name: c.name,
+          startBalance: Number(c.balance || 0),
+          balance: Number(c.balance || 0),
+          min: Number(c.min || 0),
+          apr: Number(c.apr || 0)
+        }))
+        .filter(c => c.balance > 0 && c.min >= 0);
+
+      const order = cards0
+        .slice()
+        .sort((a,b) => (a.startBalance - b.startBalance) || (a.min - b.min) || a.name.localeCompare(b.name));
+
+      const orderRows = order.map((c, i) => ({
+        priority: i + 1,
+        name: c.name,
+        startBalance: c.startBalance,
+        min: c.min,
+        rationale: i === 0
+          ? "Smallest balance: quick win to build momentum."
+          : "Next smallest balance: roll prior payment forward."
+      }));
+
+      const months = [];
+      const remainingTotals = [];
+      const schedule = [];
+
+      let active = cards0.slice().sort((a,b) => (a.balance - b.balance) || (a.min - b.min) || a.name.localeCompare(b.name));
+
+      for (let m = 0; m < maxMonths; m++) {
+        const ym = addMonths(baseMonth, m);
+
+        // apply interest first (optional, conservative)
+        for (const c of active) {
+          if (c.apr && c.apr > 0) {
+            const r = (c.apr / 100) / 12;
+            c.balance = c.balance * (1 + r);
+          }
+        }
+
+        // recompute current target: smallest balance
+        active.sort((a,b) => (a.balance - b.balance) || (a.min - b.min) || a.name.localeCompare(b.name));
+        const target = active[0];
+
+        // calculate minimums on all active cards, cap at balance
+        let totalPayment = 0;
+
+        // pay mins
+        for (const c of active) {
+          const pay = Math.min(c.min, c.balance);
+          c.balance -= pay;
+          totalPayment += pay;
+        }
+
+        // apply extra to target (if still has balance after min)
+        let extraApplied = 0;
+        if (target && extra > 0) {
+          // target might have changed balance after min
+          extraApplied = Math.min(extra, target.balance);
+          target.balance -= extraApplied;
+          totalPayment += extraApplied;
+        }
+
+        // remove paid-off cards and "roll forward" implicitly by keeping budget constant:
+        // In snowball, when a card is paid off, its minimum becomes available. Our model already keeps paying mins on active only,
+        // so freed minimums naturally increase the amount available to the next target *if user keeps the same total budget*.
+        // To represent that, we compute "payment budget" as sum(mins for original active) + extra, and pay that budget each month.
+        // We already paid mins on remaining active; the freed mins should be reallocated to the target.
+        // Implement reallocation by calculating freed minimums = sum(mins of paid-off this month) and apply to target (or next).
+        const paidOffThisMonth = active.filter(c => c.balance <= 0.00001);
+        const freedMins = paidOffThisMonth.reduce((s,c)=>s + c.min, 0);
+
+        // cleanup zero balances
+        active = active.filter(c => c.balance > 0.00001);
+
+        // allocate freed mins to the current smallest balance card (or next target) in same month
+        if (freedMins > 0 && active.length > 0) {
+          active.sort((a,b) => (a.balance - b.balance) || (a.min - b.min) || a.name.localeCompare(b.name));
+          const tgt2 = active[0];
+          const reAlloc = Math.min(freedMins, tgt2.balance);
+          tgt2.balance -= reAlloc;
+          totalPayment += reAlloc;
+
+          // after realloc, remove if paid off
+          active = active.filter(c => c.balance > 0.00001);
+        }
+
+        // totals
+        const remaining = active.reduce((s,c)=>s + c.balance, 0);
+        months.push(ym);
+        remainingTotals.push(remaining);
+
+        // schedule line item
+        const targetName = target ? target.name : "—";
+        const budgetMins = cards0.reduce((s,c)=>s + c.min, 0);
+        const plannedBudget = budgetMins + extra;
+        schedule.push({
+          month: ym,
+          target: targetName,
+          totalPayment: Math.min(plannedBudget, plannedBudget), // for display; model may vary slightly due to caps
+          remaining
+        });
+
+        if (remaining <= 0.01) break;
+      }
+
+      return { orderRows, months, remainingTotals, schedule, extra };
+    }
+
+    // -----------------------------
+    // Charts
+    // -----------------------------
+    let projectionChart, debtChart;
+
+    function renderProjectionChart(series) {
+      const ctx = document.getElementById("lineChart");
+      const labels = series.months.map(formatMonthLabel);
+
+      const data = {
+        labels,
+        datasets: [
+          { label: "Projected Income",  data: series.income,  tension: 0.25, borderWidth: 2, pointRadius: 2 },
+          { label: "Projected Expense", data: series.expense, tension: 0.25, borderWidth: 2, pointRadius: 2 },
+          { label: "Net (Income - Expense)", data: series.net, tension: 0.25, borderWidth: 2, pointRadius: 2, borderDash: [6,6] }
+        ]
+      };
+
+      const options = {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{
+          legend:{labels:{color:"#e6eefc"}},
+          tooltip:{callbacks:{label:(c)=>`${c.dataset.label}: ${currency(c.parsed.y)}`}}
+        },
+        scales:{
+          x:{ticks:{color:"#9bb0d1"},grid:{color:"rgba(255,255,255,.06)"}},
+          y:{ticks:{color:"#9bb0d1"},grid:{color:"rgba(255,255,255,.06)"}}
+        }
+      };
+
+      if (projectionChart) projectionChart.destroy();
+      projectionChart = new Chart(ctx, { type:"line", data, options });
+    }
+
+    function renderDebtChart(plan) {
+      const ctx = document.getElementById("debtChart");
+      const labels = plan.months.map(formatMonthLabel);
+
+      const data = {
+        labels,
+        datasets: [
+          { label: "Remaining Total Balance", data: plan.remainingTotals, tension: 0.25, borderWidth: 2, pointRadius: 2 }
+        ]
+      };
+
+      const options = {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{
+          legend:{labels:{color:"#e6eefc"}},
+          tooltip:{callbacks:{label:(c)=>`${c.dataset.label}: ${currency(c.parsed.y)}`}}
+        },
+        scales:{
+          x:{ticks:{color:"#9bb0d1"},grid:{color:"rgba(255,255,255,.06)"}},
+          y:{ticks:{color:"#9bb0d1"},grid:{color:"rgba(255,255,255,.06)"}}
+        }
+      };
+
+      if (debtChart) debtChart.destroy();
+      debtChart = new Chart(ctx, { type:"line", data, options });
+    }
+
+    // -----------------------------
+    // UI rendering helpers
+    // -----------------------------
+    function escapeHtml(s) {
+      return String(s)
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    function renderItemsTable(state) {
+      const tbody = document.getElementById("itemsTbody");
+      tbody.innerHTML = "";
+
+      if (!state.items.length) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td colspan="4" class="small">No saved items yet.</td>`;
+        tbody.appendChild(tr);
+        return;
+      }
+
+      for (const it of state.items) {
+        const tr = document.createElement("tr");
+        const typeTag = it.type === "income"
+          ? `<span class="tag income">Income</span>`
+          : `<span class="tag expense">Expense</span>`;
+        const recTag = it.recurring ? ` <span class="tag recurring">Recurring</span>` : "";
+        tr.innerHTML = `
+          <td>
+            <div style="font-weight:700;">${escapeHtml(it.name || "(Unnamed)")}</div>
+            <div class="small">${escapeHtml(it.monthApplies || "")}${recTag}</div>
+          </td>
+          <td>${typeTag}</td>
+          <td class="right">${currency(Number(it.amount || 0))}</td>
+          <td class="right"><button class="ghost" data-del="${it.id}">Remove</button></td>
+        `;
+        tbody.appendChild(tr);
+      }
+
+      tbody.querySelectorAll("button[data-del]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-del");
+          state.items = state.items.filter(x => x.id !== id);
+          saveState(state);
+          refresh(state);
+        });
+      });
+    }
+
+    function renderMoMTable(series) {
+      const tbody = document.getElementById("momTbody");
+      tbody.innerHTML = "";
+
+      for (let i = 0; i < series.months.length; i++) {
+        const ym = series.months[i];
+        const inc = series.income[i];
+        const exp = series.expense[i];
+        const net = series.net[i];
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${formatMonthLabel(ym)}</td>
+          <td class="right">${currency(inc)}</td>
+          <td class="right">${currency(exp)}</td>
+          <td class="right" style="font-weight:700;">${currency(net)}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+
+      const avg = (arr) => arr.reduce((a,b)=>a+b,0) / (arr.length || 1);
+      const avgInc = avg(series.income);
+      const avgExp = avg(series.expense);
+      const avgNet = avg(series.net);
+
+      document.getElementById("kpiIncome").textContent = currency(avgInc);
+      document.getElementById("kpiExpense").textContent = currency(avgExp);
+
+      const netEl = document.getElementById("kpiNet");
+      netEl.textContent = currency(avgNet);
+      netEl.classList.remove("ok","bad","warn");
+      netEl.classList.add(avgNet > 0 ? "ok" : (avgNet < 0 ? "bad" : "warn"));
+    }
+
+    function renderCardsTable(state) {
+      const tbody = document.getElementById("ccTbody");
+      tbody.innerHTML = "";
+
+      const cards = state.cards || [];
+      if (!cards.length) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td colspan="4" class="small">No credit cards saved yet.</td>`;
+        tbody.appendChild(tr);
+        return;
+      }
+
+      for (const c of cards) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>
+            <div style="font-weight:700;">${escapeHtml(c.name || "(Unnamed)")}</div>
+            <div class="small">${escapeHtml(c.startMonth || "")}${c.persistent ? ' <span class="tag recurring">Memory</span>' : ''}</div>
+          </td>
+          <td class="right">${currency(Number(c.balance || 0))}</td>
+          <td class="right">${currency(Number(c.min || 0))}</td>
+          <td class="right"><button class="ghost" data-ccdel="${c.id}">Remove</button></td>
+        `;
+        tbody.appendChild(tr);
+      }
+
+      tbody.querySelectorAll("button[data-ccdel]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-ccdel");
+          state.cards = state.cards.filter(x => x.id !== id);
+          saveState(state);
+          refresh(state);
+        });
+      });
+    }
+
+    function renderSnowballOrder(plan) {
+      const tbody = document.getElementById("snowballOrderTbody");
+      tbody.innerHTML = "";
+
+      if (!plan.orderRows.length) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td colspan="5" class="small">Add credit cards to generate a snowball plan.</td>`;
+        tbody.appendChild(tr);
+        return;
+      }
+
+      for (const r of plan.orderRows) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${r.priority}</td>
+          <td>${escapeHtml(r.name)}</td>
+          <td class="right">${currency(r.startBalance)}</td>
+          <td class="right">${currency(r.min)}</td>
+          <td>${escapeHtml(r.rationale)}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+    }
+
+    function renderSnowballSchedule(plan) {
+      const tbody = document.getElementById("snowballScheduleTbody");
+      tbody.innerHTML = "";
+
+      if (!plan.schedule.length) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td colspan="4" class="small">Run the snowball plan to see the monthly schedule.</td>`;
+        tbody.appendChild(tr);
+        return;
+      }
+
+      for (const s of plan.schedule) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${formatMonthLabel(s.month)}</td>
+          <td>${escapeHtml(s.target)}</td>
+          <td class="right">${currency(Number(s.totalPayment || 0))}</td>
+          <td class="right" style="font-weight:700;">${currency(Number(s.remaining || 0))}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+    }
+
+    function updateDebtKPIs(state, plan) {
+      const baseMonth = document.getElementById("startMonth").value || todayMonthValue();
+
+      const activeCards = (state.cards || [])
+        .filter(c => (c.startMonth ? c.startMonth <= baseMonth : true));
+
+      const totalDebt = activeCards.reduce((s,c)=>s + Number(c.balance||0), 0);
+      const mins = activeCards.reduce((s,c)=>s + Number(c.min||0), 0);
+      const extra = Number(document.getElementById("ccExtra").value || state.ccExtra || 0);
+      const budget = mins + extra;
+
+      document.getElementById("kpiDebt").textContent = currency(totalDebt);
+      document.getElementById("kpiPayBudget").textContent = currency(budget);
+
+      let payoffText = "—";
+      if (plan && plan.months && plan.remainingTotals && plan.remainingTotals.length) {
+        const lastRemaining = plan.remainingTotals[plan.remainingTotals.length - 1];
+        if (lastRemaining <= 0.01) {
+          const monthsToPayoff = plan.remainingTotals.findIndex(v => v <= 0.01) + 1;
+          payoffText = `${monthsToPayoff} mo`;
+        } else {
+          payoffText = `> ${plan.remainingTotals.length} mo`;
+        }
+      }
+      document.getElementById("kpiPayoff").textContent = payoffText;
+    }
+
+    // -----------------------------
+    // Orchestration
+    // -----------------------------
+    let lastDebtPlan = null;
+
+    function refresh(state) {
+      const startMonth = document.getElementById("startMonth").value || todayMonthValue();
+      const monthsCount = Number(document.getElementById("monthsCount").value || 12);
+
+      // persist preferences
+      state.startMonth = startMonth;
+      state.monthsCount = monthsCount;
+
+      state.ccExtra = Number(document.getElementById("ccExtra").value || state.ccExtra || 0);
+      state.ccMaxMonths = Number(document.getElementById("ccMaxMonths").value || state.ccMaxMonths || 24);
+
+      saveState(state);
+
+      // Projection
+      const series = computeSeries(state, startMonth, monthsCount);
+      renderItemsTable(state);
+      renderProjectionChart(series);
+      renderMoMTable(series);
+
+      // Debt tables
+      renderCardsTable(state);
+
+      // If we have a prior plan, keep it fresh (optional)
+      if (lastDebtPlan) {
+        updateDebtKPIs(state, lastDebtPlan);
+      } else {
+        updateDebtKPIs(state, null);
+      }
+    }
+
+    // -----------------------------
+    // Boot
+    // -----------------------------
+    const state = loadState();
+
+    // Defaults
+    document.getElementById("startMonth").value = state.startMonth || todayMonthValue();
+    document.getElementById("monthsCount").value = String(state.monthsCount || 12);
+    document.getElementById("monthApplies").value = (state.startMonth || todayMonthValue());
+
+    document.getElementById("ccStart").value = state.startMonth || todayMonthValue();
+    document.getElementById("ccExtra").value = String(state.ccExtra || 0);
+    document.getElementById("ccMaxMonths").value = String(state.ccMaxMonths || 24);
+
+    // Handlers: projection controls
+    document.getElementById("startMonth").addEventListener("change", () => refresh(state));
+    document.getElementById("monthsCount").addEventListener("change", () => refresh(state));
+
+    document.getElementById("addBtn").addEventListener("click", () => {
+      const type = document.getElementById("type").value;
+      const name = document.getElementById("name").value.trim();
+      const amount = Number(document.getElementById("amount").value);
+      const monthApplies = document.getElementById("monthApplies").value;
+      const recurring = document.getElementById("recurring").checked;
+
+      if (!name) return alert("Please enter a name.");
+      if (!Number.isFinite(amount) || amount <= 0) return alert("Please enter a valid amount > 0.");
+      if (!monthApplies) return alert("Please select a month.");
+
+      state.items.push({
+        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
+        type, name, amount, monthApplies, recurring
+      });
+
+      document.getElementById("name").value = "";
+      document.getElementById("amount").value = "";
+      document.getElementById("recurring").checked = false;
+
+      saveState(state);
+      refresh(state);
+    });
+
+    document.getElementById("demoBtn").addEventListener("click", () => {
+      const base = document.getElementById("startMonth").value || todayMonthValue();
+      state.items = [
+        { id: "d1", type: "income",  name: "Paycheck", amount: 5200, monthApplies: base, recurring: true },
+        { id: "d2", type: "income",  name: "Side Income", amount: 400,  monthApplies: base, recurring: true },
+        { id: "d3", type: "expense", name: "Rent/Mortgage", amount: 2100, monthApplies: base, recurring: true },
+        { id: "d4", type: "expense", name: "Utilities", amount: 280, monthApplies: base, recurring: true },
+        { id: "d5", type: "expense", name: "Groceries", amount: 650, monthApplies: base, recurring: true },
+        { id: "d6", type: "expense", name: "Car Repair (one-time)", amount: 900, monthApplies: addMonths(base, 2), recurring: false }
+      ];
+      saveState(state);
+      refresh(state);
+    });
+
+    // Handlers: credit cards
+    document.getElementById("ccAddBtn").addEventListener("click", () => {
+      const name = document.getElementById("ccName").value.trim();
+      const balance = Number(document.getElementById("ccBalance").value);
+      const min = Number(document.getElementById("ccMin").value);
+      const apr = Number(document.getElementById("ccApr").value || 0);
+      const startMonth = document.getElementById("ccStart").value;
+      const persistent = document.getElementById("ccRecurring").checked;
+
+      if (!name) return alert("Please enter a card name.");
+      if (!Number.isFinite(balance) || balance <= 0) return alert("Please enter a valid balance > 0.");
+      if (!Number.isFinite(min) || min < 0) return alert("Please enter a valid minimum payment (>= 0).");
+      if (!startMonth) return alert("Please select a start month.");
+
+      state.cards.push({
+        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
+        name, balance, min, apr, startMonth,
+        persistent
+      });
+
+      document.getElementById("ccName").value = "";
+      document.getElementById("ccBalance").value = "";
+      document.getElementById("ccMin").value = "";
+      document.getElementById("ccApr").value = "";
+
+      saveState(state);
+      refresh(state);
+    });
+
+    document.getElementById("ccDemoBtn").addEventListener("click", () => {
+      const base = document.getElementById("startMonth").value || todayMonthValue();
+      state.cards = [
+        { id:"c1", name:"Card A (Small)", balance: 650,  min: 35, apr: 24.99, startMonth: base, persistent:true },
+        { id:"c2", name:"Card B",         balance: 2100, min: 70, apr: 21.99, startMonth: base, persistent:true },
+        { id:"c3", name:"Card C (Large)", balance: 5400, min: 160,apr: 18.99, startMonth: base, persistent:true }
+      ];
+      document.getElementById("ccExtra").value = "150";
+      saveState(state);
+      refresh(state);
+    });
+
+    document.getElementById("ccRunBtn").addEventListener("click", () => {
+      const baseMonth = document.getElementById("startMonth").value || todayMonthValue();
+
+      // persist debt simulation prefs
+      state.ccExtra = Number(document.getElementById("ccExtra").value || 0);
+      state.ccMaxMonths = Number(document.getElementById("ccMaxMonths").value || 24);
+      saveState(state);
+
+      const plan = computeSnowballPlan(state, baseMonth);
+      lastDebtPlan = plan;
+
+      renderSnowballOrder(plan);
+      renderSnowballSchedule(plan);
+      renderDebtChart(plan);
+      updateDebtKPIs(state, plan);
+      setStatus("Snowball plan generated.");
+    });
+
+    // Keep preferences synced
+    document.getElementById("ccExtra").addEventListener("change", () => {
+      state.ccExtra = Number(document.getElementById("ccExtra").value || 0);
+      saveState(state);
+      updateDebtKPIs(state, lastDebtPlan);
+    });
+    document.getElementById("ccMaxMonths").addEventListener("change", () => {
+      state.ccMaxMonths = Number(document.getElementById("ccMaxMonths").value || 24);
+      saveState(state);
+    });
+
+    // Clear all
+    document.getElementById("clearBtn").addEventListener("click", () => {
+      if (!confirm("Clear all saved data (projection items, credit cards, and preferences)?")) return;
+      localStorage.removeItem(STORAGE_KEY);
+
+      state.items = [];
+      state.cards = [];
+      state.startMonth = null;
+      state.monthsCount = 12;
+      state.ccExtra = 0;
+      state.ccMaxMonths = 24;
+
+      document.getElementById("startMonth").value = todayMonthValue();
+      document.getElementById("monthsCount").value = "12";
+      document.getElementById("monthApplies").value = todayMonthValue();
+      document.getElementById("ccStart").value = todayMonthValue();
+      document.getElementById("ccExtra").value = "0";
+      document.getElementById("ccMaxMonths").value = "24";
+
+      lastDebtPlan = null;
+
+      // reset snowball tables
+      document.getElementById("snowballOrderTbody").innerHTML = `<tr><td colspan="5" class="small">Add credit cards to generate a snowball plan.</td></tr>`;
+      document.getElementById("snowballScheduleTbody").innerHTML = `<tr><td colspan="4" class="small">Run the snowball plan to see the monthly schedule.</td></tr>`;
+
+      if (debtChart) { debtChart.destroy(); debtChart = null; }
+      setStatus("Cleared.");
+      refresh(state);
+    });
+
+    // Initial render
+    refresh(state);
+
+    // Seed empty debt tables
+    document.getElementById("snowballOrderTbody").innerHTML = `<tr><td colspan="5" class="small">Add credit cards to generate a snowball plan.</td></tr>`;
+    document.getElementById("snowballScheduleTbody").innerHTML = `<tr><td colspan="4" class="small">Run the snowball plan to see the monthly schedule.</td></tr>`;
+  </script>
+</body>
+</html>
